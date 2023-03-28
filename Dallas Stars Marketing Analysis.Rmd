@@ -1,0 +1,165 @@
+---
+title: "Dallas Stars Promotion Analysis"
+output: html_document
+date: '2023-03-28'
+---
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r, echo= FALSE, warning=FALSE,message=FALSE, results= 'hide', include=FALSE}
+#Preparing environment for using Python in RStudio
+library(reticulate)
+py_config()
+use_python("/Users/yinwang/Library/r-miniconda/envs/r-reticulate/bin/python")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{python, echo= FALSE, warning=FALSE, message=FALSE, results= 'hide', include=FALSE}
+import numpy as np
+import pandas as pd
+
+# ignore warnings
+import warnings
+warnings.filterwarnings("ignore")
+Dstars= pd.read_csv('/Users/yinwang/Desktop/folder/SMU/Spring_Mod_B/Data-driven Marketing/HW1/dallasStars.csv')
+#Dstars['tkt+con']= Dstars['ticket'] + Dstars['concession']
+Dstars['id']= Dstars['id'].astype('object')
+#define a func to calculate profit
+def cal_con(x):
+    if x.offer == 'control':
+        return x.concession
+    elif x.offer == 'drink':
+        return x.concession - 2
+    else:
+        return x.concession - 6
+
+Dstars['profit_con'] = Dstars.apply(cal_con, axis=1)
+profit_tkt_df= Dstars[Dstars['responded']== 1].groupby('offer')['ticket'].mean().reset_index()
+profit_con_df= Dstars[Dstars['responded']== 1].groupby('offer')['profit_con'].mean().reset_index()
+res_rate_df= pd.DataFrame(Dstars.groupby('offer')['responded'].sum()/ 500).reset_index()
+df= pd.merge(res_rate_df,profit_tkt_df)
+df= pd.merge(df,profit_con_df )
+df['total_profit']= 1500 * df['responded'] * (df.ticket + df.profit_con) - 1500
+df
+```
+
+
+```{python, echo= FALSE, warning=FALSE, message=FALSE, results= 'hide', include=FALSE}
+Dstars.to_csv('Dstars_new.csv', index=False)
+```
+
+```{r}
+library(tidyverse)
+library(broom)
+library(ggplot2)
+library(reshape2)
+
+#impute data
+DStars <- read.csv("/Users/yinwang/Desktop/folder/SMU/Spring_Mod_B/Data-driven Marketing/HW1/dallasStars.csv")
+print(DStars)
+#data visualization 
+
+Dstars <- read_csv('/Users/yinwang/Desktop/folder/SMU/Spring_Mod_B/Data-driven Marketing/HW1/Dstars_new.csv')
+print(Dstars)
+
+DStars %>%
+  group_by(offer) %>% 
+  summarise(count_res = sum(responded), count_tol = n())
+
+#create a contingency table
+cont_table <- table(DStars$responded, DStars$offer)
+
+# run chi-squared test, different offers lead to different response
+chisq.test(cont_table)
+
+
+
+DStars %>%
+  group_by(offer) %>% 
+  summarise(mean_revenue_ticket = mean(ticket),
+            mean_revenue_concession= mean(concession),
+            std__revenue_ticket= sd(ticket),
+            std_revenue_consession = sd(concession),
+            n= n())
+
+
+DStars
+#anova test on ticket revenue
+ano_tkt <- aov(ticket~offer,DStars)
+summary(ano_ticket)
+
+#anova test on concession revenue
+ano_con <- aov(concession~offer,DStars)
+summary(ano_con)
+DStars
+
+
+
+DStars_total <- DStars %>%
+  group_by(offer) %>% 
+  summarise(total_revenue_ticket = sum(ticket),
+            total_revenue_concession= sum(concession))
+DStars_total
+
+Dstars
+DStars_total_2 <- Dstars %>%
+  group_by(offer) %>% 
+  summarise(total_profit_ticket = sum(ticket),
+            total_profit_concession= sum(profit_con))
+
+# Melt the data frame into a long format with variable and value columns
+DStars_total_melted <- melt(DStars_total, id.vars = "offer", measure.vars = c("total_revenue_ticket", "total_revenue_concession"))
+colnames(DStars_total_melted) <- c("Offer", "Variable", "Total Revenue")
+
+# Create a stacked bar plot for the total revenue variables
+ggplot(DStars_total_melted, aes(x = Offer, y = `Total Revenue`, fill = Variable)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(x = "Offer", y = "Total Revenue", fill = "") +
+  scale_fill_manual(values = c("#FF7F7F", "#7FBFFF"), labels = c("Total Revenue Ticket", "Total Revenue Concession")) +
+  ggtitle("Total Revenue by Offer Type") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "bottom")
+
+# Melt the data frame into a long format with variable and value columns
+DStars_total_melted <- melt(DStars_total_2, id.vars = "offer", measure.vars = c("total_profit_ticket", "total_profit_concession"))
+colnames(DStars_total_melted) <- c("Offer", "Variable", "Total Profit")
+
+# Create a stacked bar plot for the total revenue variables
+ggplot(DStars_total_melted, aes(x = Offer, y = `Total Profit`, fill = Variable)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(x = "Offer", y = "Total Profit", fill = "") +
+  scale_fill_manual(values = c("#FF7F7F", "#7FBFFF"), labels = c("Total Profit Ticket", "Total Profit Concession")) +
+  ggtitle("Total Profit by Offer Type") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "bottom")
+
+response_rate <- Dstars %>% 
+  group_by(offer) %>% 
+  summarise(res_rate = mean(responded))
+response_rate
+
+
+Dstars
+
+Dstars %>% filter(responded == 1) %>% 
+  group_by(offer) %>% 
+  summarise(avg_profit_con = mean(profit_con),
+            avg_profit_tkt = mean(ticket))
+
+
+```
+
